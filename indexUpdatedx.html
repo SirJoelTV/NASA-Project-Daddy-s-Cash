@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deoxys.AI</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for the scrollable lists */
+        .artifact-list-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .artifact-list-container::-webkit-scrollbar-track {
+            background: #1f2937; /* Dark Gray-800 */
+        }
+
+        .artifact-list-container::-webkit-scrollbar-thumb {
+            background: #a3e635; /* Lime Green (dex-accent) */
+            border-radius: 9999px; 
+        }
+
+        .artifact-list-container::-webkit-scrollbar-thumb:hover {
+            background: #84cc16; 
+        }
+
+        /* Base class for the catalog area to handle transitions */
+        #catalog-area {
+            transition: width 300ms ease-in-out, transform 300ms ease-in-out;
+        }
+
+        /* Class to make the catalog collapse into a list on select (for desktop) */
+        .list-view {
+            grid-template-columns: 1fr !important; /* Force single column */
+            gap: 0.5rem !important; /* Reduce gap for list feel */
+        }
+        
+        /* The main container for the card list */
+        #artifact-list {
+            transition: all 300ms ease-in-out;
+        }
+
+        /* Ensure the body takes up the full viewport */
+        body {
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            overflow: hidden; /* Prevent body scrollbars */
+        }
+
+        /* Abstract Capsule Styling */
+        #abstract-capsule {
+            position: fixed;
+            display: none; /* Controlled by JS */
+            z-index: 70; /* High z-index to ensure it floats over all other content */
+            pointer-events: none; /* Prevents the capsule from blocking clicks or itself triggering mouseout events */
+            max-width: 350px;
+        }
+        
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dex-primary': '#111827', 
+                        'dex-accent': '#a3e635', 
+                        'dex-secondary': '#374151', 
+                        'dex-header-bg': '#374151', 
+                        'dex-text': '#FFFFFF',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Consolas', 'Monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-800 font-sans flex flex-col h-screen w-screen">
+
+    <!-- RESEARCH DEX CONTAINER -->
+    <div id="deoxys.ai" class="w-full h-screen bg-dex-primary border-4 border-gray-700 rounded-none md:rounded-3xl shadow-2xl p-2 md:p-6 flex flex-col transition-all duration-300 overflow-hidden">
+        
+        <!-- HEADER / NAVIGATION STRIP -->
+        <div class="flex flex-col md:flex-row items-center justify-between p-3 md:p-4 bg-dex-header-bg rounded-xl mb-4 shadow-inner">
+            <h1 class="text-3xl font-extrabold text-dex-accent tracking-wider mb-3 md:mb-0">
+                <span class="text-white">DEOXYS</span>.AI
+            </h1>
+            <div class="w-full md:w-auto flex space-x-2">
+                <input type="text" id="search-input" onkeyup="if(event.key === 'Enter') { handleSearch(); }" placeholder="Search Artifacts or Ask a Question..." 
+                       class="w-full p-2 rounded-xl bg-gray-700 text-white border-2 border-dex-accent focus:border-dex-accent focus:ring-dex-accent transition-all duration-200"
+                >
+                <!-- Filters Button -->
+                <button onclick="openFilterModal()" class="p-2 bg-gray-600 text-white font-bold rounded-xl hover:bg-gray-700 transition-colors flex items-center space-x-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v7l-4 3v-7a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                    <span>Filters</span>
+                </button>
+                <button onclick="handleSearch()" class="p-2 bg-dex-accent text-dex-primary font-bold rounded-xl hover:bg-lime-500 transition-colors">
+                    Search
+                </button>
+            </div>
+        </div>
+
+        <!-- MAIN DISPLAY AREA: Dynamic Split View -->
+        <div class="flex-grow flex flex-col md:flex-row overflow-hidden space-y-4 md:space-y-0 md:space-x-4 h-full"> 
+            
+            <!-- CATALOG PANEL -->
+            <div id="catalog-area" class="w-full md:w-full flex flex-col bg-dex-primary rounded-xl p-3 shadow-lg transition-all duration-300 overflow-hidden h-full"> 
+                <h2 id="catalog-header" class="text-xl font-bold text-white mb-3 border-b border-gray-700 pb-2">Artifact Catalog (20)</h2>
+                
+                <button id="back-to-grid-btn" onclick="hideDetails()" 
+                    class="hidden items-center justify-center p-2 mb-3 bg-gray-600 text-white font-bold rounded-xl hover:bg-gray-700 transition-colors">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    Back to Grid View
+                </button>
+                
+                <div id="artifact-list" class="artifact-list-container flex-grow overflow-y-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-4">
+                    <!-- Artifact cards will be injected here by JS -->
+                </div>
+            </div>
+
+            <!-- DETAIL/ANSWER PANEL -->
+            <div id="detail-panel" class="hidden md:flex flex-col w-full md:w-0 bg-dex-secondary rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden h-full">
+                <div id="detail-content" class="h-full overflow-y-auto">
+                    <p class="text-gray-400 text-center mt-20">Select an artifact or ask a question in the search bar to view details or an AI summary here.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ABSTRACT CAPSULE -->
+    <div id="abstract-capsule" 
+         class="fixed bg-dex-secondary p-4 rounded-xl border-2 border-dex-accent shadow-2xl text-white text-sm opacity-0 transition-opacity duration-200"
+         style="display: none; pointer-events: none;">
+        <p class="font-bold text-dex-accent mb-1">Abstract:</p>
+        <p id="capsule-text"></p>
+    </div>
+    
+    <!-- Filter Modal Structure -->
+    <div id="filter-modal" class="fixed inset-0 bg-black bg-opacity-75 z-40 hidden justify-center items-center">
+        <div class="bg-dex-primary p-6 rounded-3xl border-4 border-dex-accent shadow-2xl w-full max-w-lg">
+            <h2 class="text-2xl font-bold text-dex-accent mb-4 border-b border-gray-700 pb-2">Advanced Filters</h2>
+            <div class="space-y-4 text-white">
+                <p class="text-gray-300">Filtering is currently performed by the main search bar, which checks Title, Authors, Abstract, and Tags.</p>
+                <div class="space-y-2">
+                    <label for="year-filter" class="block text-sm font-medium text-white">Filter by Year Range (e.g., 2020-2025)</label>
+                    <input type="text" id="year-filter" placeholder="e.g., 2020 or 1998-2022" 
+                           class="w-full p-2 rounded-xl bg-gray-700 text-white border border-gray-600 focus:border-dex-accent focus:ring-dex-accent">
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button onclick="closeFilterModal()" class="py-2 px-4 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-colors">
+                    Cancel
+                </button>
+                <button onclick="applyFilters()" class="py-2 px-4 bg-dex-accent text-dex-primary font-bold rounded-xl hover:bg-lime-500 transition-colors">
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- DATA (Mock Research Artifacts) ---
+        const artifacts = [
+            { id: 1, title: "Quantum Entanglement in Avian Navigation", year: 2024, authors: "Dr. A. K. Finch, P. J. Rhee", abstract: "Investigates the potential role of quantum entanglement in avian navigation and photosynthesis efficiency. Results suggest a $3\%$ increase in efficiency due to coherent quantum states. The paper details the experimental setup and theoretical model using hybrid density functional theory.", tags: ["Physics", "Biology", "Quantum"] },
+            { id: 2, title: "The Sociological Impact of Autonomous Vehicles", year: 2023, authors: "E. S. Morales", abstract: "A deep dive into the societal shifts caused by widespread adoption of Level 5 autonomous vehicles, focusing on labor markets, urban planning, and personal freedom. Includes predictive modeling for the year 2040.", tags: ["Sociology", "AI", "Policy"] },
+            { id: 3, title: "Advanced Signal Processing via Chaotic Mapping", year: 2022, authors: "L. W. Chen, Y. T. Kim", abstract: "Presents a novel algorithm for noise reduction in telemetry data using a modified Lorenz chaotic attractor for filter design. Achieves a $12$ dB improvement in signal-to-noise ratio compared to Kalman filtering.", tags: ["Engineering", "Signal Processing", "Mathematics"] },
+            { id: 4, title: "Deep Learning for Oceanic Microplastic Detection", year: 2024, authors: "J. P. Versa", abstract: "A convolutional neural network (CNN) trained on high-resolution satellite imagery for real-time identification and quantification of microplastic accumulation zones in the Pacific Gyre. Achieves $98.5\%$ accuracy.", tags: ["Ecology", "AI", "Remote Sensing"] },
+            { id: 5, title: "Historical Analysis of Renaissance Astrolabe Design", year: 1998, authors: "M. A. Galileo", abstract: "Cataloging and detailed mechanical review of six unique astrolabes dating from the 15th century, focusing on their computational accuracy and decorative motifs.", tags: ["History", "Astronomy", "Mechanical"] },
+            { id: 6, title: "Mitigating Urban Heat Islands with Green Roof Technology", year: 2023, authors: "R. D. Storm", abstract: "Quantifies the cooling effect of various green roof compositions across five major metropolitan areas. Proposes a standardized metric for urban thermal mitigation efficiency.", tags: ["Urban Planning", "Climate", "Architecture"] },
+            { id: 7, title: "Novel Drug Delivery System based on Nanobots", year: 2025, authors: "S. K. Patel, Z. M. Li", abstract: "Describes the synthesis and in-vitro testing of molecular nanobots capable of targeted drug delivery to cancer cells, reducing systemic toxicity by $85\%$.", tags: ["Medicine", "Nanotechnology", "Chemistry"] },
+            { id: 8, title: "Comparative study of Byzantine Empire's Economy", year: 2001, authors: "H. L. Constantine", abstract: "Examines the complex monetary and trade systems of the Byzantine Empire across three key periods, utilizing newly translated primary source documents.", tags: ["History", "Economics"] },
+            { id: 9, title: "Optimizing Neural Network Training via Generative Adversarial Methods", year: 2024, authors: "T. J. Smith", abstract: "A paper proposing a method to use a secondary GAN to generate optimal training examples for a primary CNN, accelerating convergence by $30\%$.", tags: ["AI", "Computer Science", "Deep Learning"] },
+            { id: 10, title: "Seismic Activity Prediction using Multi-Source Satellite Data", year: 2025, authors: "M. E. Terra", abstract: "An advanced machine learning model integrates data from GPS, gravity sensors, and thermal imaging satellites to predict major seismic events with a $70\%$ success rate $48$ hours in advance.", tags: ["Geology", "AI", "Prediction"] },
+            { id: 11, title: "Analysis of Block Manipulation and Voxel Geometry", year: 2010, authors: "M. 'Notch' Persson, J. P. Voxel", abstract: "Investigates the foundational principles governing the $\text{unit}^3$ block structure. Discusses rendering efficiency and the inherent limitations of the $16 \times 16 \times 16$ texture mapping resolution. Concludes that simplicity enables scale.", tags: ["Geometry", "Voxel", "Engine", "Design"] },
+            { id: 12, title: "Behavioral Ecology of the Creeper (C. Explosiva)", year: 2023, authors: "Dr. L. Z. Mojang", abstract: "A detailed study on the approach velocity, line-of-sight tracking, and detonation yield of the Creeper. Determines optimal avoidance distance $D \ge 3$ blocks to prevent $\text{damage} \ge 50$ units.", tags: ["Mobs", "Zoology", "Explosives", "Survival"] },
+            { id: 13, title: "Redstone Circuits: Logic Gate Implementation", year: 2022, authors: "R. S. Wire, P. T. Repeater", abstract: "Detailed guide on constructing fundamental logic gates (NOR, XOR, T-Flip-Flop) using redstone wire, repeaters, and comparators. Critical analysis of signal decay distance $L \le 15$ blocks.", tags: ["Engineering", "Logic", "Circuits", "Redstone"] },
+            { id: 14, title: "Ore Distribution and Probabilistic Mining Strategy", year: 2024, authors: "G. W. Miner", abstract: "Statistical analysis of Diamond ore density and vein size below $Y=16$. Calculates optimal branch mining pattern (strip mining vs. deep caving) for $\text{max}(\text{yield}) = 7.9$ diamonds/hour.", tags: ["Geology", "Statistics", "Mining", "Economics"] },
+            { id: 15, title: "The Nether Portal: Interdimensional Travel Mechanics", year: 2021, authors: "A. O. Gate, D. S. Obsidian", abstract: "Investigating the stability and scaling of the $\text{Overworld}: \text{Nether}$ dimension ratio of $8:1$. The paper models the energy required to ignite the 4x5 Obsidian frame and sustain the spacetime rift.", tags: ["Physics", "Dimensions", "Magic", "Travel"] },
+            { id: 16, title: "The Function of the Ender Pearl in Teleportation", year: 2025, authors: "E. P. Teler, Z. X. Void", abstract: "Hypothesizing on the non-Euclidean trajectory and energy conversion during Ender Pearl teleportation, resulting in $\text{fall damage} = 5 \text{HP}$ on impact due to dimensional stress.", tags: ["Magic", "Physics", "Teleportation", "Ender"] },
+            { id: 17, title: "Optimal Potion Brewing: Concentration and Duration", year: 2023, authors: "B. N. Brewer, A. L. Alchemy", abstract: "A comprehensive table detailing the effect duration $T$ and potency $P$ based on the addition of Redstone Dust (extender) or Glowstone Dust (potency). $T_{final} = T_{base} + \Delta T$.", tags: ["Chemistry", "Alchemy", "Potions", "Consumables"] },
+            { id: 18, title: "The Evolution of Combat Mechanics (1.9 to 1.20)", year: 2024, authors: "K. N. Swordsman", abstract: "Comparison of the 'Spam Click' attack model versus the modern 'Attack Cooldown' model. Focuses on the impact of shield utility and the introduction of sweep attacks on Player vs. Player engagements.", tags: ["Gaming", "Mechanics", "History", "PVP"] },
+            { id: 19, title: "Agriculture and Automated Farming Systems (AFSs)", year: 2022, authors: "F. W. Farmer, M. E. Piston", abstract: "Design schematics for fully automated wheat, pumpkin, and sugarcane farms utilizing water flow and piston-based harvesting mechanisms. Calculates optimal $\text{yield per hour} = 150 \text{items}$.", tags: ["Agriculture", "Automation", "Design", "Farming"] },
+            { id: 20, title: "Villager Trades and Economic Equilibrium", year: 2025, authors: "V. R. Emerald, C. J. Cartographer", abstract: "Modeling the Emerald-based barter economy of specialized Villager professions. Focus on trade rate decay, restock frequency, and the optimal timing for $\text{max}(\text{profit})$ trades.", tags: ["Economics", "AI", "Simulation", "Villager"] },
+
+{ id: 1, title: "Revisiting Viking Lander Data: A New Perspective on Water on Mars", year: 2023, authors: "Dr. Evelyn Reed, Dr. Kenji Tanaka", abstract: "By applying modern computational analysis to archived data from the 1976 Viking landers, this study reveals previously overlooked evidence of hydrated minerals. Our findings suggest that transient liquid water, in the form of thin films of brine, was present at the landing sites. This re-examination of historical data provides a new baseline for understanding the past and present distribution of water on Mars and reinforces the planet's potential habitability.", tags: ["Water on Mars", "Viking Program", "Data Reanalysis", "Geochemistry"] },
+
+{ id: 2, title: "Confirmation of Seasonal Brine Flows: A Spectroscopic Analysis of Water on Mars", year: 2024, authors: "A. B. Researcher, C. D. Scientist", abstract: "Utilizing high-resolution orbital spectroscopy, we provide direct chemical confirmation of seasonal, flowing brines in the equatorial regions of Mars. This paper definitively links Recurring Slope Lineae (RSL) features with active hydrology. Our analysis identifies the specific salt composition that allows water to remain liquid at low Martian temperatures, resolving a long-standing debate about the nature of these features.", tags: ["Water on Mars", "Spectroscopy", "Brines", "Recurring Slope Lineae"] },
+
+{ id: 3, title: "Modeling the Ancient Martian Ocean: The Extent and Duration of Surface Water", year: 2024, authors: "Dr. Maria Schmidt, Dr. Ben Carter", abstract: "This paper presents a comprehensive climate model of early Mars, integrating geological and atmospheric data to map the extent of a primordial ocean in the northern hemisphere. Our simulations indicate that a large body of liquid water was stable on the Martian surface for several hundred million years. We discuss the implications of this long-lived ocean for the planet's geological evolution and the potential for early life to emerge.", tags: ["Water on Mars", "Climate Modeling", "Paleohydrology", "Ancient Mars"] },
+
+{ id: 4, title: "Subsurface Aquifers on Mars: A Prime Target for Human Exploration and Water Extraction", year: 2025, authors: "I. J. Geophysicist, K. L. Engineer", abstract: "Analysis of sub-surface radar sounding data from the SHARAD instrument reveals extensive, porous rock layers saturated with water ice, effectively vast, frozen aquifers. Located at mid-latitudes and at accessible depths ($\Delta d < 500$ m), these deposits represent the largest known non-polar reservoir of water on Mars. We evaluate their potential as a primary source of water for in-situ resource utilization (ISRU) for future human missions.", tags: ["Water on Mars", "Subsurface Water", "ISRU", "Human Exploration"] },
+
+{ id: 5, title: "Astrobiological Potential of Martian Perchlorate Brines: Can Life Exist in Mars's Water?", year: 2025, authors: "Q. R. Biologist, S. T. Chemist", abstract: "While the discovery of liquid brines on Mars is exciting, their high perchlorate salt concentration presents a challenge for life as we know it. This paper investigates the survival limits of extremophilic microorganisms in simulated Martian water conditions. We demonstrate that certain terrestrial microbes can remain metabolically active in these brines, suggesting that Mars's water, while harsh, may not be entirely inhospitable to life.", tags: ["Water on Mars", "Astrobiology", "Extremophiles", "Habitability"] },
+        ];
+
+        let selectedArtifact = null;
+        let abstractTimeout = null; 
+        const CAPSULE_OFFSET_Y = 16; 
+
+        // --- LLM API Configuration ---
+        const GEMINI_MODEL = "gemini-2.5-flash-preview-05-20";
+        const API_KEY = ""; // This will be provided by the runtime environment
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
+        
+        const systemPrompt = "You are a world-class research assistant. Given a user query, provide a concise, factual, and well-structured answer in Markdown format. Use Google Search for up-to-date information. If you cannot find a direct answer, clearly state what information is lacking. Keep the answer brief and professional.";
+
+        // --- UI & Interaction Functions ---
+
+        function showAbstract(artifact, element) {
+            if (selectedArtifact) return;
+            if (abstractTimeout) clearTimeout(abstractTimeout);
+
+            const capsule = document.getElementById('abstract-capsule');
+            const capsuleText = document.getElementById('capsule-text');
+            const rect = element.getBoundingClientRect();
+            
+            capsuleText.textContent = artifact.abstract;
+            capsule.style.display = 'block';
+            
+            window.requestAnimationFrame(() => {
+                const capsuleWidth = capsule.offsetWidth;
+                const top = rect.top - capsule.offsetHeight - CAPSULE_OFFSET_Y;
+                const left = rect.left + (rect.width / 2) - (capsuleWidth / 2);
+                capsule.style.top = `${top}px`;
+                capsule.style.left = `${Math.max(10, left)}px`;
+                capsule.classList.remove('opacity-0');
+                capsule.classList.add('opacity-100');
+            });
+        }
+
+        function hideAbstract() {
+            const capsule = document.getElementById('abstract-capsule');
+            abstractTimeout = setTimeout(() => {
+                capsule.classList.remove('opacity-100');
+                capsule.classList.add('opacity-0');
+                setTimeout(() => { capsule.style.display = 'none'; }, 200); 
+            }, 100);
+        }
+
+        function openDetailPanel() {
+            const catalogArea = document.getElementById('catalog-area');
+            const detailPanel = document.getElementById('detail-panel');
+            const artifactList = document.getElementById('artifact-list');
+            const backButton = document.getElementById('back-to-grid-btn');
+            
+            catalogArea.classList.remove('md:w-full');
+            catalogArea.classList.add('md:w-[60%]');
+            detailPanel.classList.remove('hidden', 'md:w-0');
+            detailPanel.classList.add('md:w-[40%]'); 
+            backButton.classList.remove('hidden');
+            backButton.classList.add('md:flex'); 
+            artifactList.classList.remove('lg:grid-cols-3', 'xl:grid-cols-4', 'grid-cols-2');
+            artifactList.classList.add('md:grid-cols-1', 'list-view', 'grid-cols-1'); 
+
+            if (window.innerWidth < 768) {
+                catalogArea.classList.add('hidden');
+                detailPanel.classList.remove('hidden', 'md:w-0');
+                detailPanel.classList.add('w-full');
+            }
+        }
+
+        function hideDetails() {
+            selectedArtifact = null;
+            const catalogArea = document.getElementById('catalog-area');
+            const detailPanel = document.getElementById('detail-panel');
+            const artifactList = document.getElementById('artifact-list');
+            const backButton = document.getElementById('back-to-grid-btn');
+
+            backButton.classList.add('hidden');
+            backButton.classList.remove('md:flex');
+            catalogArea.classList.remove('md:w-[60%]', 'hidden');
+            catalogArea.classList.add('md:w-full');
+            detailPanel.classList.add('hidden', 'md:w-0');
+            detailPanel.classList.remove('md:w-[40%]', 'w-full');
+            artifactList.classList.remove('md:grid-cols-1', 'list-view', 'grid-cols-1');
+            artifactList.classList.add('lg:grid-cols-3', 'xl:grid-cols-4', 'grid-cols-2');
+            
+            document.querySelectorAll('.artifact-item').forEach(item => {
+                item.classList.remove('selected', 'bg-gray-700', 'border-4', 'border-dex-accent');
+                item.classList.add('bg-dex-secondary', 'border', 'border-transparent', 'hover:border-dex-accent');
+            });
+            
+            document.getElementById('detail-content').innerHTML = '<p class="text-gray-400 text-center mt-20">Select an artifact or ask a question in the search bar to view details or an AI summary here.</p>';
+        }
+
+        function selectArtifact(artifact, listItem) {
+            if (abstractTimeout) clearTimeout(abstractTimeout);
+            document.getElementById('abstract-capsule').style.display = 'none';
+            selectedArtifact = artifact;
+            
+            document.querySelectorAll('.artifact-item').forEach(item => {
+                item.classList.remove('selected', 'bg-gray-700', 'border-4', 'border-dex-accent');
+                item.classList.add('bg-dex-secondary', 'border', 'border-transparent', 'hover:border-dex-accent');
+            });
+            listItem.classList.remove('bg-dex-secondary', 'border', 'border-transparent');
+            listItem.classList.add('selected', 'bg-gray-700', 'border-4', 'border-dex-accent');
+
+            renderArtifactDetails(artifact);
+            openDetailPanel();
+        }
+
+        // --- Rendering Functions ---
+
+        function renderArtifactItem(artifact) {
+            const listItem = document.createElement('div');
+            listItem.className = 'artifact-item relative bg-dex-secondary p-4 rounded-xl cursor-pointer hover:bg-gray-600 transition-all duration-150 shadow-lg transform hover:scale-[1.02] border border-transparent hover:border-dex-accent';
+            listItem.setAttribute('data-id', artifact.id);
+            
+            listItem.innerHTML = `
+                <div class="flex flex-col space-y-1">
+                    <div class="flex items-center justify-between">
+                        <p class="text-white font-bold text-base max-w-[80%]"> 
+                            <span class="hover:text-dex-accent transition-colors">${artifact.title}</span>
+                        </p>
+                        <span class="font-mono text-xl font-extrabold text-dex-accent">
+                            #${String(artifact.id).padStart(2, '0')}
+                        </span>
+                    </div>
+                    <p class="text-gray-400 text-xs italic">${artifact.authors} (${artifact.year})</p>
+                    <div class="flex flex-wrap gap-1 pt-1">
+                        ${artifact.tags.slice(0, 3).map(tag => 
+                            `<span class="bg-gray-600 text-white px-2 py-0.5 text-xs font-semibold rounded-full">${tag}</span>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+            
+            listItem.onmouseover = () => showAbstract(artifact, listItem);
+            listItem.onmouseout = () => hideAbstract();
+            listItem.onclick = () => selectArtifact(artifact, listItem);
+            return listItem;
+        }
+
+        function renderArtifactList(list, query = '') {
+            const listContainer = document.getElementById('artifact-list');
+            const catalogHeader = document.getElementById('catalog-header'); 
+            listContainer.innerHTML = '';
+            
+            catalogHeader.textContent = `Artifact Catalog (${list.length})`;
+            if (list.length === 0) {
+                const message = query ? `No artifacts found matching "${query}".` : "The catalog is empty.";
+                listContainer.innerHTML = `<p class="text-gray-500 text-center p-4 col-span-full">${message} Try a different query.</p>`;
+                return;
+            }
+
+            list.forEach(artifact => {
+                listContainer.appendChild(renderArtifactItem(artifact));
+            });
+            
+            if (selectedArtifact) {
+                const element = document.querySelector(`.artifact-item[data-id="${selectedArtifact.id}"]`);
+                if (element) {
+                    element.classList.remove('bg-dex-secondary', 'border', 'border-transparent');
+                    element.classList.add('selected', 'bg-gray-700', 'border-4', 'border-dex-accent');
+                } else {
+                    hideDetails();
+                }
+            }
+        }
+
+        function renderArtifactDetails(artifact) {
+            const detailContent = document.getElementById('detail-content');
+            const clickableTags = artifact.tags.map(tag => 
+                `<button onclick="searchByTag('${tag}')" class="bg-gray-700 text-white px-3 py-1 text-sm font-semibold rounded-full hover:bg-dex-accent hover:text-dex-primary transition-colors cursor-pointer">${tag}</button>`
+            ).join('');
+
+            detailContent.innerHTML = `
+                <div class="space-y-6 text-white h-full">
+                    <button onclick="hideDetails()" class="md:hidden p-2 mb-4 bg-dex-accent text-dex-primary font-bold rounded-lg hover:bg-lime-500 transition-colors w-full">
+                        <svg class="w-5 h-5 inline mr-2 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        Back to Catalog
+                    </button>
+                    <div class="flex items-start justify-between border-b border-gray-600 pb-2">
+                        <h2 class="text-3xl font-extrabold text-dex-accent">${artifact.title}</h2>
+                        <span class="font-mono text-4xl font-extrabold text-dex-accent leading-none">#${String(artifact.id).padStart(2, '0')}</span>
+                    </div>
+                    <p class="text-gray-400 text-sm"><span class="font-semibold text-white">Authors:</span> ${artifact.authors} (${artifact.year})</p>
+                    <div class="flex flex-wrap gap-2">${clickableTags}</div>
+                    <div class="bg-gray-700 p-4 rounded-xl shadow-inner border border-dex-accent/50">
+                        <h3 class="text-lg font-bold text-dex-accent mb-2">Abstract</h3>
+                        <p class="text-gray-200 leading-relaxed">${artifact.abstract}</p>
+                    </div>
+                    <div class="pt-4 border-t border-gray-700">
+                        <h3 class="text-lg font-bold text-white mb-3">Key Findings</h3>
+                        <ul class="list-disc list-inside text-gray-300 space-y-2 pl-4">
+                            <li>Analysis showed significant correlation with factor $\zeta$ ($p < 0.01$).</li>
+                            <li>The derived formula for energy decay is $\text{E}(t) = \text{E}_0 e^{-kt^2}$.</li>
+                            <li>Future work involves scaling the model using distributed tensor processing.</li>
+                        </ul>
+                    </div>
+                </div>`;
+        }
+        
+        function renderLoadingState(query) {
+            const detailContent = document.getElementById('detail-content');
+            detailContent.innerHTML = `
+                <div class="space-y-4 text-white p-4">
+                    <h3 class="text-xl font-bold text-dex-accent">Query: ${query}</h3>
+                    <div class="flex items-center space-x-2 text-gray-400">
+                        <svg class="animate-spin h-5 w-5 text-dex-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Analyzing research data and generating summary...</span>
+                    </div>
+                </div>`;
+            openDetailPanel();
+        }
+
+        function renderLLMAnswer(query, answerText, sources, filteredArtifacts) {
+            const detailContent = document.getElementById('detail-content');
+            let sourcesHtml = '';
+
+            if (sources && sources.length > 0) {
+                const uniqueSources = Array.from(new Set(sources.map(s => s.uri))).map(uri => sources.find(s => s.uri === uri));
+                sourcesHtml = `
+                    <div class="bg-gray-700 p-3 rounded-xl border border-gray-600 mt-4">
+                        <h4 class="text-sm font-bold text-dex-accent mb-2">Sources (Google Search Grounding)</h4>
+                        <ul class="space-y-1 text-xs text-gray-400">
+                            ${uniqueSources.map(s => `<li><a href="${s.uri}" target="_blank" class="hover:text-dex-accent underline">${s.title || s.uri}</a></li>`).join('')}
+                        </ul>
+                    </div>`;
+            }
+            
+            detailContent.innerHTML = `
+                <div class="space-y-6 text-white h-full">
+                    <button onclick="hideDetails()" class="md:hidden p-2 mb-4 bg-dex-accent text-dex-primary font-bold rounded-lg hover:bg-lime-500 transition-colors w-full">
+                        <svg class="w-5 h-5 inline mr-2 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        Back to Catalog
+                    </button>
+                    <div class="p-4 rounded-xl border-2 border-dex-accent bg-gray-700 shadow-xl">
+                        <h3 class="text-xl font-bold text-dex-accent mb-2">AI Answer for: "${query}"</h3>
+                        <p class="text-gray-200 leading-relaxed">${answerText}</p>
+                    </div>
+                    ${sourcesHtml}
+                    <div id="year-graph-container" class="mt-6"></div>
+                    <p class="pt-4 text-gray-500 text-sm border-t border-gray-700">The artifacts below match keywords in your query.</p>
+                </div>`;
+
+            const yearData = generateYearData(filteredArtifacts);
+            renderYearGraph(yearData);
+        }
+        
+        function renderYearGraph(yearData) {
+            const container = document.getElementById('year-graph-container');
+            if (!container) return;
+
+            const years = Object.keys(yearData).sort((a, b) => a - b);
+            if (years.length < 2) {
+                container.innerHTML = `<p class="text-gray-500 text-sm text-center">Not enough data across multiple years to generate a trend graph.</p>`;
+                return;
+            }
+
+            const maxCount = Math.max(...Object.values(yearData));
+            const barsHtml = years.map(year => {
+                const count = yearData[year];
+                const barHeight = (count / maxCount) * 100;
+                return `
+                    <div class="flex flex-col items-center flex-grow" title="${count} publication(s) in ${year}">
+                        <div class="w-full h-32 bg-gray-600 rounded-t-md flex items-end">
+                            <div class="bg-dex-accent w-full rounded-t-md hover:bg-lime-500 transition-colors" style="height: ${barHeight}%;"></div>
+                        </div>
+                        <div class="text-xs font-mono text-gray-400 mt-1">${year}</div>
+                    </div>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="bg-gray-700 p-4 rounded-xl border border-gray-600">
+                    <h4 class="text-sm font-bold text-dex-accent mb-3">Publication Trend by Year</h4>
+                    <div class="flex items-end justify-center gap-2 md:gap-4">${barsHtml}</div>
+                </div>`;
+        }
+
+        // --- Core Logic & API ---
+
+        function generateYearData(filteredArtifacts) {
+            return filteredArtifacts.reduce((acc, artifact) => {
+                acc[artifact.year] = (acc[artifact.year] || 0) + 1;
+                return acc;
+            }, {});
+        }
+
+        function filterArtifacts(manualQuery = null) {
+            const query = (manualQuery || document.getElementById('search-input').value).toLowerCase();
+            const filtered = artifacts.filter(artifact => 
+                artifact.title.toLowerCase().includes(query) ||
+                artifact.authors.toLowerCase().includes(query) ||
+                artifact.abstract.toLowerCase().includes(query) ||
+                artifact.tags.some(tag => tag.toLowerCase().includes(query))
+            );
+            renderArtifactList(filtered, query);
+            return filtered;
+        }
+
+        async function answerQuery(query) {
+            renderLoadingState(query);
+            const filteredForGraph = filterArtifacts(query); 
+            
+            const payload = {
+                contents: [{ parts: [{ text: query }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            // Using exponential backoff for API retries
+            let attempt = 0;
+            const maxAttempts = 5;
+            while (attempt < maxAttempts) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`API call failed: ${response.status}`);
+                    
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (candidate?.content?.parts?.[0]?.text) {
+                        const text = candidate.content.parts[0].text;
+                        let sources = [];
+                        const groundingMetadata = candidate.groundingMetadata;
+                        if (groundingMetadata?.groundingAttributions) {
+                            sources = groundingMetadata.groundingAttributions
+                                .map(attr => ({ uri: attr.web?.uri, title: attr.web?.title }))
+                                .filter(source => source.uri && source.title);
+                        }
+                        renderLLMAnswer(query, text, sources, filteredForGraph);
+                        return; // Success, exit loop
+                    } else {
+                        throw new Error("Invalid response structure from LLM.");
+                    }
+                } catch (error) {
+                    console.error(`Attempt ${attempt + 1} failed:`, error);
+                    attempt++;
+                    if (attempt >= maxAttempts) {
+                        document.getElementById('detail-content').innerHTML = `
+                            <p class="text-xl text-red-500 font-bold mt-20 text-center">Error: Could not generate an AI answer after multiple attempts.</p>
+                            <p class="text-gray-400 text-center mt-2">Please try a different query or check the API configuration.</p>`;
+                        break;
+                    }
+                    const delay = Math.pow(2, attempt) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        function handleSearch() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) {
+                filterArtifacts();
+                hideDetails();     
+                return;
+            }
+            answerQuery(query);
+        }
+
+        function searchByTag(tag = null) {
+            document.getElementById('search-input').value = tag || '';
+            hideDetails(); 
+            filterArtifacts();
+        }
+
+        // --- Modal & Initialization ---
+
+        function openFilterModal() {
+            document.getElementById('filter-modal').classList.remove('hidden');
+            document.getElementById('filter-modal').classList.add('flex');
+        }
+
+        function closeFilterModal() {
+            document.getElementById('filter-modal').classList.add('hidden');
+            document.getElementById('filter-modal').classList.remove('flex');
+        }
+
+        function applyFilters() {
+            handleSearch();
+            closeFilterModal();
+        }
+
+        window.onload = () => {
+            renderArtifactList(artifacts);
+        };
+    </script>
+</body>
+</html>
+
+
